@@ -1,0 +1,359 @@
+find /var/www/user/data/mod-tmp -mmin +60 -exec rm {} \; // Clear Inodes
+
+----------------------------------------------------------------------------------
+
+Exim4 пересылка через smtp yandex, gmail
+
+1. Отправка почты через Yandex
+/etc/exim4/update-exim4.conf.conf
+
+dc_eximconfig_configtype='smarthost'
+dc_other_hostnames='server'
+dc_smarthost='smtp.yandex.ru::587'
+
+/etc/exim4/passwd.client
+
+smtp.yandex.ru:username@yandex.ru:password
+
+/etc/email-addresses
+
+root: username@yandex.ru
+www-data: username@yandex.ru
+
+$ sudo /etc/init.d/exim4 restart
+
+2. Отправка почты через Google
+/etc/exim4/update-exim4.conf.conf
+
+dc_eximconfig_configtype='smarthost'
+dc_other_hostnames='server'
+dc_smarthost='smtp.gmail.com::587'
+
+/etc/exim4/passwd.client
+
+gmail-smtp.l.google.com:username@gmail.com:password
+*.google.com:username@gmail.com:password
+smtp.gmail.com:username@gmail.com:password
+
+$ sudo /etc/init.d/exim4 restart
+
+----------------------------------------------------------------------------------
+
+ISPManager
+
+Восстановление работы ISPManager при смене IP
+
+Для начала нужно проверить лог-файл панели. Он находится по адресу:
+
+/usr/local/ispmgr/var/ihttpd.log
+
+Вероятнее всего Вы увидите там ошибку вроде:
+
+INFO Adding binding. IP:'%%YOUR_IP_HERE%%', port: 1500, cert key: '', cert path: ''
+INFO Finished with error. bind
+
+Эта ошибка значит, что встроенный web-сервер панели не может начать слушать с указанным в конфигурации IP. 
+Нужно выполнить следующие команды:
+
+# killall -9 ihttpd
+
+Для ispmgr4 # /usr/local/ispmgr/sbin/ihttpd YOUR_IP 1500
+
+Для ispmgr5 # /usr/local/mgr5/sbin/ihttpd YOUR_IP 1500
+
+Первая команда "убьёт" работающий web-сервер, а вторая запустит его на IP, 
+указанном вместо YOUR_IP. После этого Вы сможете зайти в панель по адресу:
+
+https://YOUR_IP:1500
+
+После этого Вам нужно указать новый IP вместо старого в ISPManager, раздел "Настройки", пункт "Адрес панели".
+
+----------------------------------------------------------------------------------
+
+Letsencrypt SSL-сертификат
+
+# apt install certbot
+
+Настроим nginx (/etc/nginx/conf.d/default.conf)
+
+####################################################################################
+server {
+    listen $(hostname -f):80 default_server;
+    listen [::]:80 default_server;
+
+    location /.well-known {
+        root /var/www/html;
+    }
+
+    location = /robots.txt {
+        return 200 "Host: https://\$host\n";
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+####################################################################################
+
+# certbot certonly --webroot -w /var/www/site/html/ -d site.ru --agree-tos --email site@gmail.com
+
+обновить конфиг сайта (/etc/nginx/sites-available/ site.ru.conf)
+
+####################################################################################
+upstream club.fitnesshouse.ru {server unix:/run/php/php7.0-fpm-club.sock;}
+
+server {
+	listen 80;
+	listen 443 ssl;
+	
+	root /var/www/site/html;
+
+	if ( $scheme = "http" ) {
+        return 301 https://$host$request_uri;
+    }
+	
+	index index.php index.html index.htm;
+
+	server_name site.ru;
+
+	ssl on;
+	ssl_certificate /etc/letsencrypt/live/site.ru/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/site.ru/privkey.pem;
+	ssl_trusted_certificate /etc/letsencrypt/live/site.ru/chain.pem;
+	
+	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+	ssl_prefer_server_ciphers on;
+	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:ECDHE-RSA-AES128-GCM-SHA256:AES256+EECDH:DHE-RSA-AES128-GCM-SHA256:AES256+EDH:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4";
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:SSL:50m;
+	ssl_stapling on;
+	ssl_stapling_verify on;
+	add_header Strict-Transport-Security max-age=15768000;
+	add_header Content-Security-Policy "img-src https: data:; upgrade-insecure-requests";
+	
+	location / {
+		try_files $uri $uri/ /index.php?q=$uri&$args;
+	}
+	
+	location ~ \.php$ {
+		fastcgi_pass unix:/run/php/php7.0-fpm-club.sock;
+		include fastcgi_params;
+		include snippets/fastcgi-php.conf;
+	
+		fastcgi_keep_conn on;
+		fastcgi_param PHP_ADMIN_VALUE "sendmail_path = /usr/sbin/sendmail -t -i -f noreply@site.ru";
+		fastcgi_param SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+		fastcgi_split_path_info ^((?U).+\.ph(?:p\d*|tml))(/?.+)$;
+		
+	}
+		
+	location ~ /\.ht {
+		deny all;
+	}	
+}
+####################################################################################
+
+#service nginx reload
+
+Продление Letsencrypt SSL-сертификат
+#sudo certbot renew
+
+----------------------------------------------------------------------------------
+
+nginx config file host
+
+upstream site.ru {server unix:/run/php/php7.2-fpm-site.ru.sock;}
+
+server {
+	listen 80;
+  
+	root /var/www/site.ru;
+
+	index index.php index.html index.htm;
+
+	server_name site.ru;
+
+	location / {
+		try_files $uri $uri/ /index.php?q=$uri&$args;
+	}
+	
+	location ~ \.php$ {
+		fastcgi_pass unix:/run/php/php7.2-fpm-site.ru.sock;
+		include fastcgi_params;
+		include snippets/fastcgi-php.conf;
+	
+		fastcgi_keep_conn on;
+		fastcgi_param PHP_ADMIN_VALUE "sendmail_path = /usr/sbin/sendmail -t -i -f noreply@site.ru";
+		fastcgi_param SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+		fastcgi_split_path_info ^((?U).+\.ph(?:p\d*|tml))(/?.+)$;
+	}
+
+	gzip on;
+	gzip_comp_level 5;
+	gzip_disable "msie6";
+	gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript application/javascript;
+
+	location ~ /\.ht {
+		deny all;
+	}
+	
+	# Browser caching of static assets.
+	location ~* \.(jpg|jpeg|png|gif|ico|css|js|pdf)$ {
+	expires 7d;
+	add_header Cache-Control "public, no-transform";
+	}
+
+	# Media: images, icons, video, audio send expires headers
+	location ~* \.(?:jpg|jpeg|gif|png|ico|cur|gz|svg|svgz|mp4|ogg|ogv|webm)$ {
+	  expires 1M;
+	  access_log off;
+	  add_header Cache-Control "public";
+	}
+
+	# Web fonts send expires headers
+	location ~* \.(?:eot|otf|ttf|woff|woff2)$ {
+	  expires 3M;
+	  access_log off;
+	  add_header Cache-Control "public";
+	}
+
+	# CSS and Javascript send expires headers.
+	location ~* \.(?:css|js)$ {
+	  expires 1y;
+	  access_log off;
+	  add_header Cache-Control "public";
+	}
+
+	# HTML send expires headers.
+	location ~* \.(html)$ {
+	  expires 7d;
+	  access_log off;
+	  add_header Cache-Control "public";
+	}
+}
+
+----------------------------------------------------------------------------------
+
+Setup Debian9 & PHP7.2, Nginx(mainline), MySQL (Percona), phpMyAdmin
+
+1. Get up to date
+#apt-get update
+#apt-get upgrade
+#apt-get install nano
+
+2. Installing Nginx (mainline)
+#wget http://nginx.org/keys/nginx_signing.key
+#apt-key add nginx_signing.key
+#rm nginx_signing.key
+#nano /etc/apt/sources.list
+
+Add to end file: 
+deb http://nginx.org/packages/mainline/debian/ stretch nginx
+deb-src http://nginx.org/packages/mainline/debian/ stretch nginx
+Save and Exit (ctrl + o to write the file then press ctrl + x to close the file)
+
+#apt-get update
+#apt-get install nginx
+#service nginx restart
+
+Warning: you may need to remove or stop apache2 if nginx is failing to start
+#service apache2 stop
+#apt-get --purge remove apache2
+#apt-get autoremove
+
+3. Install PHP 7.2 now with FPM
+#apt install ca-certificates apt-transport-https
+#wget -q https://packages.sury.org/php/apt.gpg -O- | apt-key add -
+#echo "deb https://packages.sury.org/php/ stretch main" | tee /etc/apt/sources.list.d/php.list
+#apt update
+#apt install php7.2
+#apt install php7.2-fpm php7.2-common php7.2-curl php7.2-gd php7.2-json php7.2-mbstring php7.2-mysql php7.2-xml
+
+4. Install MySQL (Percona DB)
+#wget https://repo.percona.com/apt/percona-release_0.1-6.$(lsb_release -sc)_all.deb
+#dpkg -i percona-release_0.1-6.$(lsb_release -sc)_all.deb
+#apt-get update
+#apt-get install percona-server-server-5.7
+
+Navigate to the line user by using the arrow keys on your keyboard and delete nginx and replace it with www-data 
+#nano /etc/nginx/nginx.conf
+Save and Exit (ctrl + o to write the file then press ctrl + x to close the file)
+
+#service nginx restart
+
+5 Install phpMyAdmin
+#apt-get install unzip
+#cd /var
+#mkdir wwww
+#cd www
+#wget https://files.phpmyadmin.net/phpMyAdmin/4.8.2/phpMyAdmin-4.8.2-all-languages.zip
+#unzip phpMyAdmin-4.8.2-all-languages.zip
+
+6. Connecting Nginx with PHP and phpMyAdmin
+Create a server .conf file for nginx to read.
+Create a new file called phpmyadmin.conf in /etc/nginx/conf.d/ you can either use nano.
+example phpmyadmin.conf:
+###########################################
+server {
+	listen 80;
+	client_max_body_size 10M;
+        # Replace localhost below with a domain or subdomain to make it easier to access.
+	server_name localhost;
+	root /var/www/phpMyAdmin;
+	index index.php index.htm index.html;
+
+  location / {
+    try_files $uri $uri/ /index.php?$args;
+  }
+
+  location ~ \.php$ {
+    try_files $uri =404;
+    fastcgi_pass unix:/run/php/php7.2-fpm.sock;
+          fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_index   index.php;
+    include fastcgi_params;
+  }
+
+}
+###########################################
+Save and Exit (ctrl + o to write the file then press ctrl + x to close the file)
+#service nginx restart
+
+----------------------------------------------------------------------------------
+
+MySQL
+
+Восстановление пароля root mysql
+
+# service mysql stop
+
+Запуск MySQL без пароля
+
+# mysqld_safe --skip-grant-tables &
+
+Подключаемся к MySQL
+
+# mysql -u root
+
+mysql>
+
+Устанавливаем новый пароль root:
+
+mysql> use mysql;
+
+mysql> update user set password=PASSWORD("newrootpassword") where user="root";
+
+mysql> flush privileges;
+
+mysql> quit
+
+# service mysql restart
+
+----------------------------------------------------------------------------------
+
+Postfix очистка очереди
+
+# mailq
+# service postfix stop
+# postsuper -d ALL
+# service postfix start
