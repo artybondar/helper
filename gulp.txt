@@ -1,0 +1,33 @@
+1. Глобальная установка gulp
+перейти в нужную папку и выполнить
+$ npm install --global gulp-cli
+
+2. Установка gulp для текущего проекта
+перейти в папку проекта и выполнить
+$ npm init
+$ npm install --save-dev gulp
+
+3. Создать в корне проекта файл gulpfile.js
+Содержимое файла:
+var gulp = require('gulp');
+
+gulp.task('default', function() {
+  console.log('Hello world');
+});
+
+Плагины gulpjs.com/plugins/
+
+плагины, что объединяют несколько файлов в один, с названия понятно с какими именног файлами работают:
+gulp-concat
+gulp-concat-folders
+gulp-concat-css
+gulp-concat-js
+
+плагины, что минимизируют код:
+gulp-clean-css
+gulp-mini-htmlmin
+gulp-minify-html-2
+gulp-minify-inline
+
+плагин, что удаляет не использованный код CSS:
+gulp-uncss
