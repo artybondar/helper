@@ -158,6 +158,9 @@ server {
 Продление Letsencrypt SSL-сертификат
 #sudo certbot renew
 
+check status cert
+sudo certbot certificates
+
 ----------------------------------------------------------------------------------
 
 nginx config file host
