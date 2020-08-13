@@ -10,18 +10,17 @@ php artisan serve
 
 # Steps To Clone & Run
 
-git clone https://github.com/...git
+1. git clone https://github.com/...git
 
-composer install/update
+2. composer install/update
 
-npm install
+3. npm install
+3.1 npm install express // npm install -g express-generator
+3.2 npm init then -> npm install
 
-cp .env.example .env and then configure your db
+4. cp .env.example .env and then configure your db
 
-php artisan migrate
-
-php artisan passport:install
-
-php artisan storage:link
-
-php artisan serve & npm run watch
+5. php artisan migrate
+5.1 php artisan passport:install
+5.2 php artisan storage:link
+5.3 php artisan serve & npm run watch
